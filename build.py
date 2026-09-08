@@ -24,7 +24,7 @@ MANIFEST = {
     "conflicts": [],
     "min_point_version": 50,
     "max_point_version": 0,
-    "human_version": "1.0.0",
+    "human_version": "1.0.1",
 }
 
 INCLUDE = [

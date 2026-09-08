@@ -129,8 +129,13 @@ RIGHT: List[Element] = [
 
     Element("Home", "home", 64, 302, r=14, label="Home"),
 
-    Element("SL", "rrect", 10, 132, 12, 34, r=5, label="SL (rail)"),
-    Element("SR", "rrect", 10, 214, 12, 34, r=5, label="SR (rail)"),
+    # The rail is mirrored on this half, and so is the order of its buttons.
+    # Held sideways the right Joy-Con turns *clockwise* (its left-edge rail
+    # goes to the top), so the LOWER rail button is the one that ends up under
+    # your left index finger: SR is the upper button here, SL the lower --
+    # the opposite of the left Joy-Con above.
+    Element("SR", "rrect", 10, 132, 12, 34, r=5, label="SR (rail)"),
+    Element("SL", "rrect", 10, 214, 12, 34, r=5, label="SL (rail)"),
 ]
 
 

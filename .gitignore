@@ -1,0 +1,9 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
+
+# Saved profiles are per-install, not part of the source tree
+user_files/profiles/*.ankicon.json

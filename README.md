@@ -7,9 +7,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="Version 1.0.0">
+  <img src="https://img.shields.io/badge/version-1.0.1-blue" alt="Version 1.0.1">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform: macOS">
-  <img src="https://img.shields.io/badge/Anki-2.1.50%2B-brightgreen" alt="Anki 2.1.50+">
+  <img src="https://img.shields.io/badge/Anki-26.08.01-brightgreen" alt="Anki 26.08.01">
   <img src="https://img.shields.io/badge/licence-MIT-green" alt="MIT licence">
 </p>
 
@@ -71,7 +71,28 @@ The shipped version is defined once in [`build.py`](build.py) and written into
 
 | Version | Date | Anki | Status | Summary |
 |---|---|---|---|---|
-| **1.0.0** | 2026-09-08 | 2.1.50+ | **Current** | First public release. Joy-Con support on macOS with per-grip mappings, the full reviewer action set, colour customisation and profiles. |
+| **1.0.1** | 2026-09-08 | 26.08.01 | **Current** | Patch: fixes transposed `SL`/`SR` rail buttons on the right Joy-Con, and moves the tested Anki baseline to 26.08.01. |
+| 1.0.0 | 2026-09-08 | 26.08.01 | Superseded | First public release. Joy-Con support on macOS with per-grip mappings, the full reviewer action set, colour customisation and profiles. |
+
+### 1.0.1 — 2026-09-08
+
+**Fixed**
+
+- **`SL` and `SR` were transposed on the right Joy-Con.** The rail is mirrored
+  between the halves: held sideways the left Joy-Con turns anticlockwise and the
+  right turns clockwise, so on the right Joy-Con the **lower** rail button is
+  `SL`, not the upper one. The mapping diagram drew both halves with `SL` on
+  top, so on the right Joy-Con every rail binding, colour change and press
+  highlight landed on the opposite button. The left Joy-Con was never affected.
+
+**Changed**
+
+- Anki **26.08.01** is now the tested baseline. The add-on still declares a
+  floor of point version 50, so earlier 2.1.x releases continue to install.
+- The default-mapping section now documents the mirrored rail, so the differing
+  physical positions aren't mistaken for differing bindings.
+
+---
 
 ### 1.0.0 — 2026-09-08
 
@@ -117,6 +138,7 @@ The shipped version is defined once in [`build.py`](build.py) and written into
 
 | | Status | Notes |
 |---|---|---|
+| **Anki 26.08.01** | ✅ Supported | The tested release. Installs on 2.1.50+ as well, untested. |
 | **macOS** | ✅ Supported | The tested platform. Native IOKit backend, no dependencies. |
 | **Joy-Con (L) / Joy-Con (R)** | ✅ Supported | Singly or as a pair. |
 | **Pro Controller (Switch 1)** | ⚠️ Untested | The product id is matched and the protocol is the same family, so it should map as both halves at once — but nobody has confirmed it, and the diagram still draws a pair of Joy-Cons. Reports welcome. |
@@ -128,8 +150,12 @@ The shipped version is defined once in [`build.py`](build.py) and written into
 ## Requirements
 
 - macOS
-- Anki 2.1.50 or newer
+- Anki 26.08.01
 - One or two Joy-Cons paired over Bluetooth
+
+Ankicon is developed and tested against Anki **26.08.01**. `manifest.json`
+declares a floor of point version 50 and no upper bound, so it still installs on
+earlier 2.1.x releases — but those are untested.
 
 ## Installation
 
@@ -225,6 +251,13 @@ What varies per grip is the shoulders and the rail:
 | `L` / `R` | Undo / Show Answer | Replay Audio | Show Answer |
 | `ZL` / `ZR` | Pause Audio / Replay Audio | Pause Audio | Replay Audio |
 | `SL` / `SR` | *unbound* — a grip covers them | Undo / Show Answer | Audio −5s / +5s |
+
+> **The rail is mirrored between the halves.** Held sideways the left Joy-Con
+> turns anticlockwise and the right turns clockwise, so `SL` is the **upper**
+> rail button on the left Joy-Con and the **lower** one on the right. Both are
+> bound the same way — `SL` is Undo and `SR` is Show Answer on either half — so
+> the button under your left index finger does the same thing whichever Joy-Con
+> you pick up.
 
 ---
 
