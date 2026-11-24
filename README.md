@@ -166,7 +166,7 @@ Press **Options…** at the bottom of the window. Click the **?** beside a setti
 to see what it does.
 
 <p align="center">
-  <img src="docs/options.png" alt="The Options window, grouped into Controller, Reviewing and Debugging" width="440">
+  <img src="docs/options.png" alt="The Options window, grouped into Controller, Reviewing and Debugging" width="385">
 </p>
 
 | Option | What it does |
