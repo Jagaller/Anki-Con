@@ -130,7 +130,7 @@ def defaults() -> dict:
         "colors": default_colors(),
         "active_profile": "",
         "window_size": None,
-        "rumble_on_answer": True,
+        "rumble_on_answer": False,
         "rumble_strength": 0.35,
         "player_leds": True,
         "stick_deadzone": 0.5,

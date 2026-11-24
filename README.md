@@ -176,7 +176,7 @@ to see what it does.
 | **Player LED** | Lights the player number on each Joy-Con. |
 | **Stick deadzone** | How far you push the stick before it counts. |
 | **Reveal answer first** | Pressing Again, Hard, Good or Easy shows a hidden answer. When off, the press is ignored. |
-| **Rumble** | Vibrates when you answer a card or use a card action, such as Mark or Bury. |
+| **Rumble** | Vibrates when you answer a card or use a card action, such as Mark or Bury. Off by default. |
 | **Rumble strength** | From 0 (none) to 1 (strongest). |
 | **Action tooltips** | Briefly shows the name of each action. |
 | **Verbose logging** | Prints controller activity to the console. |
@@ -310,6 +310,7 @@ Anki-Con uses [semantic versioning](https://semver.org).
   match.
 - The add-on's name in Anki is now Anki-Con.
 - A refreshed look for the mapping, Options and Diagnostics windows.
+- Rumble is off by default. Your saved setting is kept.
 - Shorter option names, each with a **?** that explains it.
 - A simple connection indicator replaces the status text. Hover over it for
   details.

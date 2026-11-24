@@ -108,7 +108,7 @@
   },
   "orientation": "single_h",
   "player_leds": true,
-  "rumble_on_answer": true,
+  "rumble_on_answer": false,
   "rumble_strength": 0.35,
   "seize_device": false,
   "show_tooltip_on_action": false,

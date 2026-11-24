@@ -354,6 +354,7 @@ class HelpPopup(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         # Clicking the "?" again closes the bubble instead of reopening it.
         self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, True)
+        self._owner = owner
         self._above = False
         self._tip_x = 0.0
 
@@ -388,6 +389,10 @@ class HelpPopup(QWidget):
         self._tip_x = float(mid.x() - x)
         self.setGeometry(x, top, size.width(), size.height())
         self.show()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._owner.popup_closed()
 
     def _pad(self, above: bool) -> None:
         self._above = above
@@ -424,8 +429,11 @@ class HelpButton(QAbstractButton):
         super().__init__()
         self._title, self._text = title, text
         self.popup = None
+        # Tracked here rather than with underMouse(): no leave event arrives
+        # while a popup is open, which left the icon lit after it closed.
+        self._hot = False
         self.setFixedSize(18, 18)
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.setAccessibleName(f"About {title}")
@@ -436,11 +444,32 @@ class HelpButton(QAbstractButton):
         self.popup = HelpPopup(self._title, self._text, self)
         self.popup.show_beside(self)
 
+    def popup_closed(self) -> None:
+        self.popup = None
+        self._set_hot(False)
+
+    def _set_hot(self, on: bool) -> None:
+        if on != self._hot:
+            self._hot = on
+            self.update()
+
+    def enterEvent(self, event) -> None:
+        self._set_hot(True)
+        super().enterEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        self._set_hot(True)
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self._set_hot(False)
+        super().leaveEvent(event)
+
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        hot = self.underMouse() or self.hasFocus()
-        ink = QColor(ACCENT) if hot else color("muted")
+        lit = self._hot or self.popup is not None or self.hasFocus()
+        ink = QColor(ACCENT) if lit else color("muted")
         p.setPen(QPen(ink, 1.2))
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawEllipse(QRectF(1.5, 1.5, 15, 15))
