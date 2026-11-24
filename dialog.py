@@ -299,6 +299,8 @@ class AnkiconDialog(QDialog):
         row.setSpacing(8)
         self.status = StatusBadge()
         row.addWidget(self.status)
+        row.addSpacing(4)
+        row.addWidget(style.Logo())
         row.addStretch(1)
 
         for text, slot in (("Rescan", self._rescan),

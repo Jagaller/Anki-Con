@@ -9,6 +9,8 @@ keeps the file pickers and message boxes opened from these windows native.
 
 from __future__ import annotations
 
+import os
+
 from aqt.qt import *
 
 ACCENT = "#0a84ff"
@@ -204,6 +206,35 @@ def _arrows(p: QPainter, x: float, y: float, ink: QColor) -> None:
         p.drawPolyline(QPolygonF([QPointF(x - 3.2, y + sign * 2.4),
                                   QPointF(x, y + sign * 5.6),
                                   QPointF(x + 3.2, y + sign * 2.4)]))
+
+
+class Logo(QWidget):
+    """The Anki-Con wordmark, scaled for the screen it is shown on."""
+
+    HEIGHT = 36
+    _PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png")
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._source = QPixmap(self._PATH)
+        self._scaled = QPixmap()
+        # Takes no room if the image is missing.
+        width = 0 if self._source.isNull() else round(
+            self.HEIGHT * self._source.width() / self._source.height())
+        self.setFixedSize(width, self.HEIGHT)
+        self.setAccessibleName("Anki-Con")
+
+    def paintEvent(self, _e) -> None:
+        if self._source.isNull():
+            return
+        ratio = self.devicePixelRatioF()
+        if self._scaled.isNull() or self._scaled.devicePixelRatio() != ratio:
+            self._scaled = self._source.scaled(
+                round(self.width() * ratio), round(self.height() * ratio),
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+            self._scaled.setDevicePixelRatio(ratio)
+        QPainter(self).drawPixmap(0, 0, self._scaled)
 
 
 class Combo(QComboBox):

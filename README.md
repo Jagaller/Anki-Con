@@ -17,7 +17,7 @@ Anki-Con lets you review your cards from a controller. Pick a button on the
 diagram, choose what it does, and start studying.
 
 <p align="center">
-  <img src="docs/grip-dual.png" alt="The Anki-Con window in Dual-Controller Grip, with a pink left Joy-Con and a green right one" width="860">
+  <img src="docs/grip-dual.png" alt="The Anki-Con window in Dual-Controller Grip, with a light grey left Joy-Con and a purple right one" width="860">
 </p>
 
 ## Contents

@@ -30,7 +30,7 @@ MANIFEST = {
 INCLUDE = [
     "__init__.py", "actions.py", "art.py", "controller.py", "dialog.py",
     "joycon_view.py", "profiles.py", "settings.py", "style.py",
-    "config.json", "config.md", "manifest.json", "README.md",
+    "config.json", "config.md", "logo.png", "manifest.json", "README.md",
     "joycon/__init__.py", "joycon/backend_hidapi.py", "joycon/backend_macos.py",
     "joycon/device.py", "joycon/hub.py", "joycon/protocol.py",
 ]
