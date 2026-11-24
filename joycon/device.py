@@ -24,7 +24,7 @@ class JoyConDevice:
 
     def __init__(self, handle: int, product_id: int, serial: str,
                  send: Callable[[int, bytes], None], player: int = 1,
-                 deadzone: float = 0.5, log=print) -> None:
+                 deadzone: float = 0.5, log=print, leds: bool = True) -> None:
         self.handle = handle
         self.product_id = product_id
         self.serial = serial
@@ -32,6 +32,7 @@ class JoyConDevice:
         self.name = P.PRODUCT_NAMES.get(product_id, "Controller")
         self.player = player
         self.deadzone = deadzone
+        self.leds = leds
         self._send = send
         self._log = log
 
@@ -73,16 +74,21 @@ class JoyConDevice:
         sending all four back-to-back means a race in which some land and some
         do not -- which shows up later as "rumble does nothing" or "the buttons
         are scrambled", depending on which one lost. Only the subcommands that
-        have not been acknowledged are re-sent.
+        have not taken effect are re-sent.
         """
         self._init_tries += 1
         wanted = [
             (P.SUBCMD_ENABLE_VIBRATION, bytes([0x01])),
             (P.SUBCMD_ENABLE_IMU, bytes([0x00])),   # off: nothing here needs gyro
-            (P.SUBCMD_SET_PLAYER_LIGHTS, bytes([P.player_light_mask(self.player)])),
+            (P.SUBCMD_SET_PLAYER_LIGHTS, bytes([self._light_mask()])),
             (P.SUBCMD_SET_INPUT_MODE, bytes([P.REPORT_STANDARD])),
         ]
-        todo = [(sub, args) for sub, args in wanted if sub not in self._acked]
+        # An acknowledged input mode still counts as outstanding until 0x30
+        # reports actually arrive: a Joy-Con can accept the command and stay in
+        # basic mode, and then the retries would have nothing to send.
+        todo = [(sub, args) for sub, args in wanted
+                if sub not in self._acked
+                or (sub == P.SUBCMD_SET_INPUT_MODE and not self.full_mode)]
         # Input mode last: once 0x30 reports start flowing the 0x21 replies for
         # anything still outstanding stop arriving.
         for i, (sub, args) in enumerate(todo):
@@ -90,7 +96,7 @@ class JoyConDevice:
         self._init_deadline = time.time() + len(todo) * self.SUBCMD_SPACING + 1.0
 
     def poll_init(self) -> None:
-        """Re-send whatever the controller never acknowledged.
+        """Re-send whatever has not taken effect yet.
 
         Keeps trying for a while rather than giving up after a fixed handful:
         a controller that misses the handshake is not usable, and retrying is
@@ -118,8 +124,17 @@ class JoyConDevice:
 
     def set_player(self, player: int) -> None:
         self.player = player
-        self._subcmd(P.SUBCMD_SET_PLAYER_LIGHTS,
-                     bytes([P.player_light_mask(player)]))
+        self._send_lights()
+
+    def set_leds(self, on: bool) -> None:
+        self.leds = on
+        self._send_lights()
+
+    def _light_mask(self) -> int:
+        return P.player_light_mask(self.player) if self.leds else 0
+
+    def _send_lights(self) -> None:
+        self._subcmd(P.SUBCMD_SET_PLAYER_LIGHTS, bytes([self._light_mask()]))
 
     # -- incoming ----------------------------------------------------------
 

@@ -27,7 +27,9 @@ def _queued():
 
 
 class _Bridge(QObject):
-    button = pyqtSignal(str, bool, int)      # button id, pressed, device handle
+    # button id, pressed, device handle. The handle is a 64-bit pointer on macOS
+    # and a Qt int is 32-bit, so it crosses as an object to survive intact.
+    button = pyqtSignal(str, bool, object)
     devices = pyqtSignal(object)             # list[dict]
     message = pyqtSignal(str)
 
@@ -35,7 +37,8 @@ class _Bridge(QObject):
 class JoyConController:
     """One per Anki session."""
 
-    # stick directions repeat while held; buttons do not
+    # Stick directions repeat while held, unless the action opts out; buttons
+    # do not.
     REPEAT_AFTER = 0.45
     REPEAT_EVERY = 0.14
 
@@ -70,6 +73,7 @@ class JoyConController:
                 deadzone=float(self.cfg.get("stick_deadzone", 0.5)),
                 log=lambda m: self.bridge.message.emit(str(m)),
                 seize=bool(self.cfg.get("seize_device", False)),
+                player_leds=bool(self.cfg.get("player_leds", True)),
             )
         ok = self.hub.start()
 
@@ -106,8 +110,9 @@ class JoyConController:
             return
         if self.hub:
             self.hub.set_deadzone(float(self.cfg.get("stick_deadzone", 0.5)))
+            self.hub.set_player_leds(bool(self.cfg.get("player_leds", True)))
         if self.cfg.get("enabled", True):
-            if self.hub is None or self.hub.backend_name == "none":
+            if self.hub is None or not self.hub.is_running():
                 self.start()
         else:
             self.stop()
@@ -121,9 +126,19 @@ class JoyConController:
 
     def _on_devices_main(self, info) -> None:
         self.device_info = list(info or [])
-        if not self.device_info:
-            self._held.clear()
+        self._drop_stale_holds()
         self._recompute_layout()
+
+    def _drop_stale_holds(self) -> None:
+        """Forget sticks held on a controller that has gone away.
+
+        A disconnect sends no release, so without this the other Joy-Con staying
+        connected was enough to keep the action repeating forever.
+        """
+        live = {d.get("handle") for d in self.device_info}
+        for button, (_due, handle) in list(self._held.items()):
+            if handle not in live:
+                del self._held[button]
 
     def poll_devices(self) -> None:
         """Re-read live device state.
@@ -139,6 +154,7 @@ class JoyConController:
             self.device_info = self.hub.devices()
         except Exception:
             return
+        self._drop_stale_holds()
         self._recompute_layout()
 
     def _recompute_layout(self) -> None:
@@ -189,6 +205,9 @@ class JoyConController:
         now = time.time()
         for button, (due, handle) in list(self._held.items()):
             if now >= due:
+                act = actions.ACTIONS_BY_ID.get(self.bindings().get(button))
+                if act is not None and not act.repeatable:
+                    continue
                 self._fire(button, handle, repeat=True)
                 self._held[button] = (now + self.REPEAT_EVERY, handle)
 
@@ -204,7 +223,7 @@ class JoyConController:
 
         if not repeat and self.cfg.get("rumble_on_answer") and self.hub:
             act = actions.ACTIONS_BY_ID.get(action_id)
-            if act and act.group in ("Answering", "Card"):
+            if act and act.haptic and act.group in ("Answering", "Card"):
                 strength = float(self.cfg.get("rumble_strength", 0.35))
                 freq = 260.0 if action_id == "again" else 340.0
                 try:
@@ -274,7 +293,7 @@ class JoyConController:
         """Everything worth pasting into a bug report."""
         import platform
         lines = [
-            f"Ankicon diagnostics",
+            f"Anki-Con diagnostics",
             f"macOS {platform.mac_ver()[0]} / Python {platform.python_version()}",
         ]
         if self.hub:

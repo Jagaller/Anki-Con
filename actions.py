@@ -18,11 +18,13 @@ deck list.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import sys
+from dataclasses import dataclass
 from typing import Callable, List, Optional
 
 from aqt import mw
 from aqt.qt import *
+from aqt.utils import tooltip
 
 
 # --------------------------------------------------------------------------
@@ -98,6 +100,48 @@ def _main(*names, args=()) -> Callable[[], bool]:
 
 
 # --------------------------------------------------------------------------
+# Toggle Masks
+#
+# Not a reviewer command at all: it is a button inside the card, drawn by the
+# card's own template. So it is clicked in the page, like a mouse would.
+#
+#   #toggle        Anki's built-in Image Occlusion. The id is generic enough to
+#                  turn up in unrelated templates, hence the container check.
+#                  Anki hides it when the card has nothing to toggle.
+#   #io-revl-btn   The Image Occlusion Enhanced add-on. Some templates hide the
+#                  button but its handler still works, so visibility is ignored.
+#
+# Failing both, any visible button captioned "Toggle Masks" will do, which
+# covers note types that restyled either of them.
+# --------------------------------------------------------------------------
+
+_TOGGLE_MASKS_JS = r"""
+(() => {
+  const visible = (el) => !!el && el.getClientRects().length > 0;
+  const native = document.getElementById("image-occlusion-container")
+    && document.getElementById("toggle");
+  const enhanced = document.getElementById("io-revl-btn");
+  const target = (visible(native) && native) || enhanced
+    || [...document.querySelectorAll("button, input[type=button], a")].find(
+      (el) => visible(el)
+        && /^\s*toggle\s+masks?\s*$/i.test(el.textContent || el.value || ""));
+  if (!target) { return false; }
+  target.click();
+  return true;
+})()
+"""
+
+
+def _toggle_masks() -> bool:
+    def done(found) -> None:
+        if found is False:
+            tooltip("This card has no masks to toggle.", period=1200)
+
+    mw.reviewer.web.evalWithCallback(_TOGGLE_MASKS_JS, done)
+    return True
+
+
+# --------------------------------------------------------------------------
 # Registry
 # --------------------------------------------------------------------------
 
@@ -110,6 +154,9 @@ class Action:
     fallback: Optional[Callable[[], bool]] = None
     review_only: bool = True
     answer_side_only: bool = False
+    question_side_only: bool = False
+    repeatable: bool = True         # False: holding a stick fires it only once
+    haptic: bool = True             # False: never rumbles, whatever its group
 
     def run(self) -> bool:
         if self.shortcut and _emit_state_shortcut(self.shortcut):
@@ -124,6 +171,10 @@ class Action:
         return False
 
 
+# Anki uses a different key on macOS.
+_DELETE_NOTE_KEY = "Ctrl+Backspace" if sys.platform == "darwin" else "Ctrl+Delete"
+
+
 def _flag(n: int) -> Action:
     return Action(f"flag_{n}", f"Flag {n}", "Flags", f"Ctrl+{n}",
                   _reviewer("set_flag_on_current_card", "setFlag", args=(n,)))
@@ -134,7 +185,7 @@ ACTIONS: List[Action] = [
 
     # --- answering -------------------------------------------------------
     Action("show_answer", "Show Answer", "Answering", " ",
-           _reviewer("_showAnswer", "onEnterKey")),
+           _reviewer("_showAnswer", "onEnterKey"), question_side_only=True),
     Action("again", "Again (1)", "Answering", "1",
            _reviewer("_answerCard", args=(1,)), answer_side_only=True),
     Action("hard", "Hard (2)", "Answering", "2",
@@ -163,22 +214,24 @@ ACTIONS: List[Action] = [
            _reviewer("onReplayRecorded", "on_replay_recorded")),
 
     # --- card / note actions ---------------------------------------------
+    Action("toggle_masks", "Toggle Masks", "Card", "", _toggle_masks,
+           haptic=False),
     Action("mark_note", "Mark Note", "Card", "*",
            _reviewer("toggle_mark_on_current_note", "onMark", "on_mark")),
     Action("bury_card", "Bury Card", "Card", "-",
-           _reviewer("bury_current_card")),
+           _reviewer("bury_current_card"), repeatable=False),
     Action("bury_note", "Bury Note", "Card", "=",
-           _reviewer("bury_current_note")),
+           _reviewer("bury_current_note"), repeatable=False),
     Action("suspend_card", "Suspend Card", "Card", "@",
            _reviewer("suspend_current_card")),
     Action("suspend_note", "Suspend Note", "Card", "!",
            _reviewer("suspend_current_note")),
-    Action("delete_note", "Delete Note", "Card", "Ctrl+Delete",
+    Action("delete_note", "Delete Note", "Card", _DELETE_NOTE_KEY,
            _reviewer("delete_current_note")),
     Action("create_copy", "Create Copy", "Card", "Ctrl+Alt+E",
            _reviewer("on_create_copy")),
     Action("reset_card", "Reset Card", "Card", "Ctrl+Alt+N",
-           _reviewer("on_forget", "on_reset_card")),
+           _reviewer("forget_current_card", "on_forget", "on_reset_card")),
     Action("set_due_date", "Set Due Date", "Card", "Ctrl+Shift+D",
            _reviewer("on_set_due", "set_due_date")),
     Action("card_info", "Card Info", "Card", "I",
@@ -209,7 +262,7 @@ ACTIONS: List[Action] = [
     Action("stats", "Statistics", "Navigation", "Shift+S",
            _main("onStats"), review_only=False),
     Action("sync", "Sync", "Navigation", "Y",
-           _main("onSync"), review_only=False),
+           _main("onSync", "on_sync_button_clicked"), review_only=False),
 ]
 
 ACTIONS_BY_ID = {a.id: a for a in ACTIONS}
@@ -236,15 +289,19 @@ def label_for(action_id: str) -> str:
 # Dispatch
 # --------------------------------------------------------------------------
 
+def _blocked() -> bool:
+    """True while a modal dialog or a popup menu is up."""
+    try:
+        return (mw is None or mw.app.activeModalWidget() is not None
+                or mw.app.activePopupWidget() is not None)
+    except Exception:
+        return False
+
+
 def can_run(action: Action) -> bool:
     """Guard rails, so a pocket press cannot do something surprising."""
-    try:
-        if mw is None or mw.app.activeModalWidget() is not None:
-            return False
-        if mw.app.activePopupWidget() is not None:
-            return False
-    except Exception:
-        pass
+    if _blocked():
+        return False
 
     if action.review_only:
         if getattr(mw, "state", None) != "review":
@@ -253,6 +310,8 @@ def can_run(action: Action) -> bool:
         if rev is None or getattr(rev, "card", None) is None:
             return False
         if action.answer_side_only and getattr(rev, "state", None) != "answer":
+            return False
+        if action.question_side_only and getattr(rev, "state", None) != "question":
             return False
     return True
 
@@ -269,7 +328,7 @@ def run_action(action_id: str, reveal_first: bool = True) -> bool:
     if (action.answer_side_only and reveal_first
             and getattr(mw, "state", None) == "review"
             and getattr(getattr(mw, "reviewer", None), "state", None) == "question"):
-        return ACTIONS_BY_ID["show_answer"].run()
+        action = ACTIONS_BY_ID["show_answer"]
 
     if not can_run(action):
         return False

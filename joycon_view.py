@@ -15,26 +15,26 @@ from typing import Dict, List, Tuple
 
 from aqt.qt import *
 
-from . import actions, art, settings
+from . import actions, art, settings, style
 from .joycon import protocol as P
 
 # --------------------------------------------------------------------------
 # Metrics
 # --------------------------------------------------------------------------
 
-ROW_H = 28
+ROW_H = 30
 ROW_GAP = 4
-SWATCH = 18
+SWATCH = 20
 LABEL_W = 84
-COMBO_W = 196
-GUTTER_W = SWATCH + 6 + LABEL_W + 6 + COMBO_W
+COMBO_W = 224
+GAP = 10                 # between a row's swatch, label and dropdown
+GUTTER_W = SWATCH + GAP + LABEL_W + GAP + COMBO_W
 LEADER_GAP = 26          # clear space between a gutter and the artwork
 ART_MIN_W = 300
 MARGIN = 12
 
-LEADER = QColor("#e0474f")
-LEADER_DIM = QColor("#9aa0a6")
-FLASH = QColor("#4f9dff")
+LEADER = QColor(style.ACCENT)
+FLASH = QColor(style.LIVE)
 FLASH_MS = 450
 
 
@@ -98,10 +98,126 @@ class ColorSwatch(QPushButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         r = QRectF(1.5, 1.5, self.width() - 3, self.height() - 3)
-        p.setBrush(self.color if self.isEnabled()
-                   else _shade(self.color.toHsv(), 0.6))
-        p.setPen(QPen(QColor(0, 0, 0, 90), 1.0))
-        p.drawRoundedRect(r, 4, 4)
+        base = self.color if self.isEnabled() \
+            else _shade(self.color.toHsv(), 0.6)
+        fill = QLinearGradient(r.topLeft(), r.bottomLeft())
+        fill.setColorAt(0.0, base.lighter(112))
+        fill.setColorAt(1.0, base)
+        p.setBrush(QBrush(fill))
+        if self.underMouse() or self.hasFocus():
+            p.setPen(QPen(QColor(style.ACCENT), 1.5))
+        else:
+            p.setPen(QPen(style.color("field_border"), 1.0))
+        p.drawEllipse(r)
+
+
+class StatusBadge(QWidget):
+    """Connection indicator: a pair of Joy-Cons, lit up when connected.
+
+    Only the halves that are actually connected light up, so it needs no more
+    than a word beside it.
+    """
+
+    OK, WARN, OFF = "ok", "warn", "off"
+    _COLORS = {OK: "#34c759", WARN: "#f5a623", OFF: "#8e8e93"}
+    _WORDS = {OK: "Connected", WARN: "No input", OFF: "Disconnected"}
+
+    HEIGHT = 36
+    _PAD, _ICON_W, _GAP, _DOT = 14, 27, 10, 4
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.state = self.OFF
+        self.sides: set = set()
+        font = self.font()
+        font.setWeight(QFont.Weight.DemiBold)
+        self.setFont(font)
+        # Sized for the longest word, so the box never jumps about.
+        widest = max(self.fontMetrics().horizontalAdvance(w)
+                     for w in self._WORDS.values())
+        self.setFixedSize(2 * self._PAD + self._ICON_W + 2 * self._GAP
+                          + 2 * self._DOT + widest, self.HEIGHT)
+        self.setAccessibleName(self._WORDS[self.state])
+
+    def set_status(self, state: str, sides=()) -> None:
+        sides = set(sides)
+        if P.SIDE_PRO in sides:
+            sides |= {P.SIDE_LEFT, P.SIDE_RIGHT}
+        if (state, sides) != (self.state, self.sides):
+            self.state, self.sides = state, sides
+            self.setAccessibleName(self._WORDS[state])
+            self.update()
+
+    def paintEvent(self, _e) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        color = QColor(self._COLORS[self.state])
+
+        def tint(alpha: int) -> QColor:
+            c = QColor(color)
+            c.setAlpha(alpha)
+            return c
+
+        box = QRectF(self.rect()).adjusted(0.75, 0.75, -0.75, -0.75)
+        p.setBrush(tint(38))
+        p.setPen(QPen(tint(120), 1.5))
+        p.drawRoundedRect(box, box.height() / 2, box.height() / 2)
+
+        mid = self.height() / 2.0
+        x = float(self._PAD)
+        self._draw_half(p, QRectF(x, mid - 11, 12, 22), P.SIDE_LEFT, color)
+        self._draw_half(p, QRectF(x + 15, mid - 11, 12, 22), P.SIDE_RIGHT, color)
+        x += self._ICON_W + self._GAP
+
+        # status light, with a soft glow while something is connected
+        centre = QPointF(x + self._DOT, mid)
+        p.setPen(Qt.PenStyle.NoPen)
+        if self.state != self.OFF:
+            p.setBrush(tint(70))
+            p.drawEllipse(centre, self._DOT + 3, self._DOT + 3)
+        p.setBrush(color)
+        p.drawEllipse(centre, self._DOT, self._DOT)
+        x += 2 * self._DOT + self._GAP
+
+        p.setPen(self.palette().color(QPalette.ColorRole.WindowText))
+        p.drawText(QRectF(x, 0, self.width() - x, self.height()),
+                   Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                   self._WORDS[self.state])
+
+    def _draw_half(self, p: QPainter, r: QRectF, side: str,
+                   color: QColor) -> None:
+        left = side == P.SIDE_LEFT
+        lit = side in self.sides and self.state != self.OFF
+        outer, inner = 5.5, 1.5
+        body = _rounded_path(r.left(), r.top(), r.right(), r.bottom(),
+                             *((outer, inner, inner, outer) if left
+                               else (inner, outer, outer, inner)))
+        line = QColor(color)
+        line.setAlpha(255 if lit else 110)
+        p.setPen(QPen(line, 1.4))
+        p.setBrush(color if lit else Qt.BrushStyle.NoBrush)
+        p.drawPath(body)
+
+        # stick and button cluster: high/low on the left, low/high on the right
+        detail = QColor(255, 255, 255, 235) if lit else line
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(detail)
+        high, low = r.top() + 7.0, r.bottom() - 7.0
+        cx = r.center().x()
+        p.drawEllipse(QPointF(cx, high if left else low), 2.5, 2.5)
+        y = low if left else high
+        for dx, dy in ((0, -2.4), (0, 2.4), (-2.4, 0), (2.4, 0)):
+            p.drawEllipse(QPointF(cx + dx, y + dy), 1.0, 1.0)
+
+
+class ActionCombo(style.Combo):
+    """Shows just the action; the group it belongs to is in the list."""
+
+    def face_text(self) -> str:
+        return actions.label_for(self.currentData() or "none")
+
+    def is_empty(self) -> bool:
+        return self.currentData() in (None, "none")
 
 
 class MapperPanel(QWidget):
@@ -128,6 +244,7 @@ class MapperPanel(QWidget):
         self.setMinimumSize(2 * GUTTER_W + 2 * LEADER_GAP + ART_MIN_W + 2 * MARGIN,
                             15 * (ROW_H + ROW_GAP) + 2 * MARGIN)
 
+        self.setAutoFillBackground(False)
         self._flash_timer = QTimer(self)
         self._flash_timer.setInterval(60)
         qconnect(self._flash_timer.timeout, self._tick_flash)
@@ -149,11 +266,9 @@ class MapperPanel(QWidget):
 
         name = QLabel(element.label, row)
         name.setObjectName("calloutLabel")
-        font = name.font()
-        font.setPointSizeF(max(9.0, font.pointSizeF() - 0.5))
-        name.setFont(font)
+        name.setProperty("kind", "muted")
 
-        combo = QComboBox(row)
+        combo = ActionCombo(row)
         combo.setFixedWidth(COMBO_W)
         self._fill_combo(combo)
         qconnect(combo.currentIndexChanged,
@@ -362,16 +477,16 @@ class MapperPanel(QWidget):
         name = slot.row.findChild(QLabel, "calloutLabel")
         if mirrored:
             slot.combo.setGeometry(0, 1, COMBO_W, ROW_H - 2)
-            name.setGeometry(COMBO_W + 6, 0, LABEL_W, ROW_H)
+            name.setGeometry(COMBO_W + GAP, 0, LABEL_W, ROW_H)
             name.setAlignment(Qt.AlignmentFlag.AlignLeft
                               | Qt.AlignmentFlag.AlignVCenter)
-            slot.swatch.move(COMBO_W + 6 + LABEL_W + 6, (ROW_H - SWATCH) // 2)
+            slot.swatch.move(COMBO_W + GAP + LABEL_W + GAP, (ROW_H - SWATCH) // 2)
         else:
             slot.swatch.move(0, (ROW_H - SWATCH) // 2)
-            name.setGeometry(SWATCH + 6, 0, LABEL_W, ROW_H)
+            name.setGeometry(SWATCH + GAP, 0, LABEL_W, ROW_H)
             name.setAlignment(Qt.AlignmentFlag.AlignRight
                               | Qt.AlignmentFlag.AlignVCenter)
-            slot.combo.setGeometry(SWATCH + 6 + LABEL_W + 6, 1, COMBO_W, ROW_H - 2)
+            slot.combo.setGeometry(SWATCH + GAP + LABEL_W + GAP, 1, COMBO_W, ROW_H - 2)
 
     # -- painting ----------------------------------------------------------
 
@@ -547,7 +662,7 @@ class MapperPanel(QWidget):
                 continue
             live = bid in self._flash or bid == self.selected or bid == self._hover
             color = FLASH if bid in self._flash else (
-                LEADER if live else LEADER_DIM)
+                LEADER if live else style.color("leader"))
             p.setPen(QPen(color, 2.0 if live else 1.1,
                           Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             p.setBrush(color)

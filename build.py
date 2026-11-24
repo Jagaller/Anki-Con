@@ -19,17 +19,17 @@ PACKAGE = "ankicon"
 
 MANIFEST = {
     "package": PACKAGE,
-    "name": "Ankicon",
+    "name": "Anki-Con",
     "mod": 0,
     "conflicts": [],
     "min_point_version": 50,
     "max_point_version": 0,
-    "human_version": "1.0.1",
+    "human_version": "1.1.0",
 }
 
 INCLUDE = [
     "__init__.py", "actions.py", "art.py", "controller.py", "dialog.py",
-    "joycon_view.py", "profiles.py", "settings.py",
+    "joycon_view.py", "profiles.py", "settings.py", "style.py",
     "config.json", "config.md", "manifest.json", "README.md",
     "joycon/__init__.py", "joycon/backend_hidapi.py", "joycon/backend_macos.py",
     "joycon/device.py", "joycon/hub.py", "joycon/protocol.py",

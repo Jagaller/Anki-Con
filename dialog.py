@@ -1,17 +1,17 @@
-"""Ankicon's mapping window: Tools ▸ Ankicon…"""
+"""Anki-Con's mapping window: Tools ▸ Anki-Con…"""
 
 from __future__ import annotations
 
 import os
 from typing import Dict
 
-from aqt import mw
+from aqt import gui_hooks, mw
 from aqt.qt import *
 from aqt.utils import getText, showWarning, tooltip
 
-from . import profiles, settings
+from . import profiles, settings, style
 from .joycon import protocol as P
-from .joycon_view import ColorSwatch, MapperPanel
+from .joycon_view import ColorSwatch, MapperPanel, StatusBadge
 
 _NO_PROFILE = "— unsaved —"
 
@@ -22,63 +22,99 @@ class OptionsDialog(QDialog):
     def __init__(self, cfg: dict, parent=None) -> None:
         super().__init__(parent)
         self.cfg = cfg
-        self.setWindowTitle("Ankicon Options")
-        form = QFormLayout(self)
+        self.setWindowTitle("Anki-Con Options")
+        self.setMinimumWidth(480)
+        style.apply(self)
 
-        self.chk_enabled = QCheckBox("Listen for Joy-Cons")
-        self.chk_enabled.setChecked(bool(cfg["enabled"]))
-        form.addRow(self.chk_enabled)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(20, 18, 20, 18)
+        outer.setSpacing(6)
 
-        self.chk_seize = QCheckBox(
-            "Take exclusive control of the controller")
-        self.chk_seize.setChecked(bool(cfg.get("seize_device", False)))
+        self.chk_enabled = self._switch(cfg["enabled"])
+        self.chk_seize = self._switch(cfg.get("seize_device", False))
         self.chk_seize.setToolTip(
             "macOS has its own Joy-Con driver and can hold the controller so "
             "that Anki receives nothing. This takes it away from the system "
             "while Anki is running. Turn it on if buttons do nothing, then "
             "press Rescan.")
-        form.addRow(self.chk_seize)
+        self.chk_leds = self._switch(cfg.get("player_leds", True))
+        self.spin_dead = self._spin(0.2, 0.95, cfg["stick_deadzone"])
+        self._section(outer, "Controller", (
+            ("Listen for Joy-Cons", self.chk_enabled),
+            ("Take exclusive control of the controller", self.chk_seize),
+            ("Light the player LED on connected controllers", self.chk_leds),
+            ("Stick deadzone", self.spin_dead)))
 
-        self.chk_reveal = QCheckBox(
-            "An ease button on the question side shows the answer instead")
-        self.chk_reveal.setChecked(bool(cfg["ease_reveals_answer"]))
-        form.addRow(self.chk_reveal)
+        self.chk_reveal = self._switch(cfg["ease_reveals_answer"])
+        self.chk_rumble = self._switch(cfg["rumble_on_answer"])
+        self.spin_rumble = self._spin(0.0, 1.0, cfg["rumble_strength"])
+        self._section(outer, "Reviewing", (
+            ("An ease button on the question side shows the answer instead",
+             self.chk_reveal),
+            ("Rumble when a card is answered", self.chk_rumble),
+            ("Rumble strength", self.spin_rumble)))
 
-        self.chk_rumble = QCheckBox("Rumble when a card is answered")
-        self.chk_rumble.setChecked(bool(cfg["rumble_on_answer"]))
-        form.addRow(self.chk_rumble)
+        self.chk_tooltip = self._switch(cfg["show_tooltip_on_action"])
+        self.chk_log = self._switch(cfg["verbose_log"])
+        self._section(outer, "Debugging", (
+            ("Show a tooltip naming each action fired", self.chk_tooltip),
+            ("Verbose logging to the console", self.chk_log)))
 
-        self.spin_rumble = QDoubleSpinBox()
-        self.spin_rumble.setRange(0.0, 1.0)
-        self.spin_rumble.setSingleStep(0.05)
-        self.spin_rumble.setValue(float(cfg["rumble_strength"]))
-        form.addRow("Rumble strength", self.spin_rumble)
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 12, 0, 0)
+        row.setSpacing(8)
+        row.addStretch(1)
+        row.addWidget(style.button("Cancel", self.reject))
+        ok = style.button("OK", self.accept, "primary")
+        ok.setDefault(True)
+        row.addWidget(ok)
+        outer.addLayout(row)
 
-        self.spin_dead = QDoubleSpinBox()
-        self.spin_dead.setRange(0.2, 0.95)
-        self.spin_dead.setSingleStep(0.05)
-        self.spin_dead.setValue(float(cfg["stick_deadzone"]))
-        form.addRow("Stick deadzone", self.spin_dead)
+    @staticmethod
+    def _switch(on) -> style.Switch:
+        w = style.Switch()
+        w.setChecked(bool(on))
+        return w
 
-        self.chk_tooltip = QCheckBox("Show a tooltip naming each action fired")
-        self.chk_tooltip.setChecked(bool(cfg["show_tooltip_on_action"]))
-        form.addRow(self.chk_tooltip)
+    @staticmethod
+    def _spin(low: float, high: float, value) -> style.Spin:
+        w = style.Spin()
+        w.setRange(low, high)
+        w.setSingleStep(0.05)
+        w.setValue(float(value))
+        return w
 
-        self.chk_log = QCheckBox("Verbose logging to the console")
-        self.chk_log.setChecked(bool(cfg["verbose_log"]))
-        form.addRow(self.chk_log)
-
-        box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
-                               | QDialogButtonBox.StandardButton.Cancel)
-        qconnect(box.accepted, self.accept)
-        qconnect(box.rejected, self.reject)
-        form.addRow(box)
+    @staticmethod
+    def _section(outer: QVBoxLayout, title: str, rows) -> None:
+        """A titled card with one setting per line."""
+        if outer.count():
+            outer.addSpacing(10)
+        caption = style.label(title, "caption")
+        caption.setContentsMargins(6, 0, 0, 0)
+        outer.addWidget(caption)
+        card = style.frame("card")
+        v = QVBoxLayout(card)
+        v.setContentsMargins(14, 2, 14, 2)
+        v.setSpacing(0)
+        for n, (text, control) in enumerate(rows):
+            if n:
+                v.addWidget(style.rule())
+            line = QHBoxLayout()
+            line.setContentsMargins(0, 8, 0, 8)
+            name = style.RowLabel(text, control)
+            name.setToolTip(control.toolTip())
+            line.addWidget(name, 1)
+            line.addSpacing(16)
+            line.addWidget(control)
+            v.addLayout(line)
+        outer.addWidget(card)
 
     def apply_to(self, cfg: dict) -> None:
         cfg["enabled"] = self.chk_enabled.isChecked()
         cfg["ease_reveals_answer"] = self.chk_reveal.isChecked()
         cfg["rumble_on_answer"] = self.chk_rumble.isChecked()
         cfg["rumble_strength"] = float(self.spin_rumble.value())
+        cfg["player_leds"] = self.chk_leds.isChecked()
         cfg["stick_deadzone"] = float(self.spin_dead.value())
         cfg["seize_device"] = self.chk_seize.isChecked()
         cfg["show_tooltip_on_action"] = self.chk_tooltip.isChecked()
@@ -91,25 +127,27 @@ class DiagnosticsDialog(QDialog):
     def __init__(self, controller, parent=None) -> None:
         super().__init__(parent)
         self.controller = controller
-        self.setWindowTitle("Ankicon Diagnostics")
+        self.setWindowTitle("Anki-Con Diagnostics")
         self.resize(760, 520)
+        style.apply(self)
 
         v = QVBoxLayout(self)
+        v.setContentsMargins(20, 18, 20, 18)
+        v.setSpacing(14)
         self.view = QPlainTextEdit()
         self.view.setReadOnly(True)
+        self.view.setProperty("kind", "code")
         self.view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
         self.view.setFont(font)
         v.addWidget(self.view)
 
         row = QHBoxLayout()
-        copy = QPushButton("Copy to clipboard")
-        qconnect(copy.clicked, self._copy)
+        copy = style.button("Copy to clipboard", self._copy, "primary")
+        copy.setDefault(True)
         row.addWidget(copy)
         row.addStretch(1)
-        close = QPushButton("Close")
-        qconnect(close.clicked, self.accept)
-        row.addWidget(close)
+        row.addWidget(style.button("Close", self.accept))
         v.addLayout(row)
 
         self._timer = QTimer(self)
@@ -144,8 +182,9 @@ class AnkiconDialog(QDialog):
         self._panel_ready = False
         self._connected: set = set()
 
-        self.setWindowTitle("Ankicon")
+        self.setWindowTitle("Anki-Con")
         self.setSizeGripEnabled(True)
+        style.apply(self)
         self._build()
         self._apply_initial_size()
 
@@ -154,6 +193,7 @@ class AnkiconDialog(QDialog):
         qconnect(self._status_timer.timeout, self._refresh_status)
         self._status_timer.start()
 
+        gui_hooks.theme_did_change.append(self._on_theme_changed)
         self.controller.add_watcher(self._on_press)
         self._refresh_profiles()
         self._refresh_status(force=True)
@@ -168,7 +208,7 @@ class AnkiconDialog(QDialog):
         a sliver. Clamped to the screen so it still fits a small laptop.
         """
         want = self.cfg.get("window_size")
-        chrome_w, chrome_h = 70, 215      # status bar, toolbar, hint, buttons
+        chrome_w, chrome_h = 70, 235      # header, toolbar, footer, margins
         if not (isinstance(want, list) and len(want) == 2):
             want = [self.panel.minimumWidth() + chrome_w,
                     self.panel.minimumHeight() + chrome_h]
@@ -183,6 +223,10 @@ class AnkiconDialog(QDialog):
             h = min(h, max(360, avail.height() - 60))
         self.resize(w, h)
 
+    def _on_theme_changed(self) -> None:
+        self.setStyleSheet(style.sheet())
+        self.update()
+
     def _remember_size(self) -> None:
         # Window geometry is a UI preference, not part of the mapping, so it is
         # written straight through rather than waiting for Save.
@@ -195,7 +239,8 @@ class AnkiconDialog(QDialog):
 
     def _build(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setSpacing(8)
+        outer.setContentsMargins(20, 16, 20, 16)
+        outer.setSpacing(12)
 
         outer.addLayout(self._status_bar())
         outer.addWidget(self._toolbar())
@@ -207,70 +252,80 @@ class AnkiconDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setProperty("kind", "clear")
         scroll.setWidget(self.panel)
-        outer.addWidget(scroll, 1)
+        scroll.viewport().setAutoFillBackground(False)
+        self.panel.setAutoFillBackground(False)
 
-        hint = QLabel("Click a button on the diagram to jump to its dropdown, or "
-                      "right-click it to change its colour. Press a button on a "
-                      "live Joy-Con and it lights up here.")
+        card = style.frame("card")
+        inside = QVBoxLayout(card)
+        inside.setContentsMargins(8, 8, 8, 8)
+        inside.addWidget(scroll)
+        outer.addWidget(card, 1)
+        outer.addLayout(self._footer())
+
+    def _footer(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        row.addWidget(style.button("Restore Defaults", self._restore_defaults))
+        row.addWidget(style.button("Options…", self._open_options))
+
+        hint = style.label("Click a button to edit it, right-click to recolour "
+                           "it, or press it on your Joy-Con.", "muted")
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setWordWrap(True)
-        # Dim the normal text colour rather than naming one: "palette(mid)"
-        # resolves to a dark grey that is unreadable on Anki's dark themes.
-        pal = hint.palette()
-        col = pal.color(QPalette.ColorRole.WindowText)
-        col.setAlpha(165)
-        pal.setColor(QPalette.ColorRole.WindowText, col)
-        hint.setPalette(pal)
-        outer.addWidget(hint)
+        row.addWidget(hint, 1)
 
-        box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save
-                               | QDialogButtonBox.StandardButton.Cancel
-                               | QDialogButtonBox.StandardButton.RestoreDefaults)
-        opts = box.addButton("Options…", QDialogButtonBox.ButtonRole.ActionRole)
-        qconnect(opts.clicked, self._open_options)
-        qconnect(box.accepted, self._save)
-        qconnect(box.rejected, self.reject)
-        qconnect(box.button(QDialogButtonBox.StandardButton.RestoreDefaults).clicked,
-                 self._restore_defaults)
-        outer.addWidget(box)
+        row.addWidget(style.button("Cancel", self.reject))
+        save = style.button("Save", self._save, "primary")
+        save.setDefault(True)
+        row.addWidget(save)
+        return row
 
     def _status_bar(self) -> QHBoxLayout:
         row = QHBoxLayout()
-        self.status = QLabel()
-        self.status.setWordWrap(True)
-        self.status.setStyleSheet("padding:6px 10px; border-radius:5px;")
-        row.addWidget(self.status, 1)
+        row.setSpacing(8)
+        self.status = StatusBadge()
+        row.addWidget(self.status)
+        row.addStretch(1)
 
         for text, slot in (("Rescan", self._rescan),
                            ("Test rumble", self._test_rumble),
                            ("Diagnostics…", self._open_diagnostics),
                            ("Pairing help", self._pairing_help)):
-            btn = QPushButton(text)
-            qconnect(btn.clicked, slot)
-            row.addWidget(btn)
+            row.addWidget(style.button(text, slot))
         return row
 
     def _toolbar(self) -> QWidget:
-        bar = QWidget()
+        bar = style.frame("card")
         row = QHBoxLayout(bar)
-        row.setContentsMargins(0, 0, 0, 0)
+        row.setContentsMargins(14, 10, 14, 10)
+        row.setSpacing(8)
 
-        row.addWidget(QLabel("Grip:"))
-        self.grip_buttons: Dict[str, QRadioButton] = {}
+        row.addWidget(style.label("Grip", "caption"))
+        self.grip_buttons: Dict[str, QPushButton] = {}
         group = QButtonGroup(self)
+        well = style.frame("well")
+        segments = QHBoxLayout(well)
+        segments.setContentsMargins(3, 3, 3, 3)
+        segments.setSpacing(2)
+        row.addWidget(well)
         for name in settings.LAYOUTS:
-            rb = QRadioButton(settings.LAYOUT_LABELS[name])
+            rb = style.button(settings.LAYOUT_LABELS[name], kind="segment")
+            rb.setCheckable(True)
             group.addButton(rb)
-            row.addWidget(rb)
+            segments.addWidget(rb)
             self.grip_buttons[name] = rb
             qconnect(rb.toggled,
                      lambda on, n=name: self._on_grip_toggled(n, on))
 
-        row.addSpacing(18)
-        row.addWidget(QLabel("Shell:"))
+        row.addSpacing(6)
+        row.addWidget(style.rule(vertical=True))
+        row.addSpacing(6)
+        row.addWidget(style.label("Shell", "caption"))
         self.shell_swatches: Dict[str, ColorSwatch] = {}
         for side, label in ((P.SIDE_LEFT, "L"), (P.SIDE_RIGHT, "R")):
-            row.addWidget(QLabel(label))
+            row.addWidget(style.label(label, "muted"))
             sw = ColorSwatch()
             sw.setToolTip(f"Colour of the {label} shell")
             sw.set_color(settings.shell_color(self.cfg, side))
@@ -278,20 +333,20 @@ class AnkiconDialog(QDialog):
             self.shell_swatches[side] = sw
             row.addWidget(sw)
 
-        row.addStretch(1)
-
-        row.addWidget(QLabel("Profile:"))
-        self.profile_combo = QComboBox()
-        self.profile_combo.setMinimumWidth(160)
+        row.addSpacing(6)
+        row.addWidget(style.rule(vertical=True))
+        row.addSpacing(6)
+        row.addWidget(style.label("Profile", "caption"))
+        self.profile_combo = style.Combo()
+        self.profile_combo.setMinimumWidth(130)
+        self.profile_combo.setFixedHeight(30)
         qconnect(self.profile_combo.currentIndexChanged, self._on_profile_picked)
-        row.addWidget(self.profile_combo)
+        row.addWidget(self.profile_combo, 1)
         for text, slot in (("Save as…", self._profile_save_as),
                            ("Delete", self._profile_delete),
                            ("Import…", self._profile_import),
                            ("Export…", self._profile_export)):
-            btn = QPushButton(text)
-            qconnect(btn.clicked, slot)
-            row.addWidget(btn)
+            row.addWidget(style.button(text, slot))
         return bar
 
     # -- grip / layout -----------------------------------------------------
@@ -443,12 +498,12 @@ class AnkiconDialog(QDialog):
     def _profile_import(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self, "Import a controller profile", "",
-            "Ankicon profiles (*.json);;All files (*)")
+            "Anki-Con profiles (*.json);;All files (*)")
         if not path:
             return
         payload = profiles.import_from(path)
         if payload is None:
-            showWarning("That file isn't an Ankicon profile.", parent=self)
+            showWarning("That file isn't an Anki-Con profile.", parent=self)
             return
         self._refresh_profiles(select=payload["name"])
         self.profile_combo.setCurrentIndex(
@@ -456,11 +511,11 @@ class AnkiconDialog(QDialog):
 
     def _profile_export(self) -> None:
         self._commit_current()
-        name = self.cfg.get("active_profile") or "ankicon-profile"
+        name = self.cfg.get("active_profile") or "anki-con-profile"
         path, _ = QFileDialog.getSaveFileName(
             self, "Export controller profile",
             os.path.expanduser(f"~/{name}{profiles.SUFFIX}"),
-            "Ankicon profiles (*.json)")
+            "Anki-Con profiles (*.json)")
         if not path:
             return
         profiles.export_to(path, self.cfg, name)
@@ -479,12 +534,12 @@ class AnkiconDialog(QDialog):
         changed = connected != self._connected
         self._connected = connected
 
-        self.status.setText(self.controller.status_text())
-        healthy = bool(info) and self.controller.is_healthy()
-        self.status.setStyleSheet(
-            "padding:6px 10px; border-radius:5px;"
-            + ("background:#1f7a3f; color:white;" if healthy
-               else "background:#8a6d1f; color:white;"))
+        if info and self.controller.is_healthy():
+            state = StatusBadge.OK
+        else:
+            state = StatusBadge.WARN if info else StatusBadge.OFF
+        self.status.set_status(state, connected)
+        self.status.setToolTip(self.controller.status_text())
 
         if changed or force:
             self._sync_grip_availability()
@@ -558,6 +613,7 @@ class AnkiconDialog(QDialog):
         self._remember_size()
         self._status_timer.stop()
         self.controller.remove_watcher(self._on_press)
+        gui_hooks.theme_did_change.remove(self._on_theme_changed)
 
 
 # Kept so an older import path still resolves.

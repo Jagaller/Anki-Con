@@ -17,25 +17,27 @@ from .device import JoyConDevice
 class JoyConHub:
     def __init__(self, on_button: Callable[[object, str, bool], None],
                  on_devices_changed: Callable[[List[dict]], None] = None,
-                 deadzone: float = 0.5, log=print, seize: bool = False) -> None:
+                 deadzone: float = 0.5, log=print, seize: bool = False,
+                 player_leds: bool = True) -> None:
         self.on_button = on_button
         self.on_devices_changed = on_devices_changed or (lambda _d: None)
         self.deadzone = deadzone
         self.log = log
         self.seize = seize
+        self.player_leds = player_leds
 
         self._devices: Dict[int, JoyConDevice] = {}
         self._lock = threading.RLock()
         self._backend = None
         self._keeper: Optional[threading.Thread] = None
-        self._running = threading.Event()
+        self._keeper_stop = threading.Event()
         self.backend_name = "none"
         self.last_error: Optional[str] = None
 
     # -- lifecycle ---------------------------------------------------------
 
     def start(self) -> bool:
-        if self._backend is not None:
+        if self.is_running():
             return True
 
         from . import backend_macos, backend_hidapi
@@ -57,15 +59,21 @@ class JoyConHub:
             self.log(self.last_error)
             return False
 
-        self._running.set()
         self._backend.start()
+        # A fresh event per run, so a keeper still sleeping from the last run
+        # can't be revived by this one.
+        self._keeper_stop = threading.Event()
         self._keeper = threading.Thread(target=self._keepalive_loop,
+                                        args=(self._keeper_stop,),
                                         name="JoyConKeeper", daemon=True)
         self._keeper.start()
         return True
 
+    def is_running(self) -> bool:
+        return self._backend is not None
+
     def stop(self) -> None:
-        self._running.clear()
+        self._keeper_stop.set()
         if self._backend:
             try:
                 self._backend.stop()
@@ -112,6 +120,14 @@ class JoyConHub:
             for d in self._devices.values():
                 d.deadzone = value
 
+    def set_player_leds(self, on: bool) -> None:
+        self.player_leds = on
+        with self._lock:
+            devs = list(self._devices.values())
+        for d in devs:
+            if d.leds != on:
+                d.set_leds(on)
+
     # -- backend callbacks (HID thread) ------------------------------------
 
     def _attached(self, handle: int, product_id: int, serial: str) -> None:
@@ -119,7 +135,8 @@ class JoyConHub:
             player = len(self._devices) + 1
             dev = JoyConDevice(handle, product_id, serial,
                                send=self._send, player=player,
-                               deadzone=self.deadzone, log=self.log)
+                               deadzone=self.deadzone, log=self.log,
+                               leds=self.player_leds)
             self._devices[handle] = dev
         self.log(f"connected: {dev.name} ({serial})")
         dev.initialise()
@@ -166,9 +183,8 @@ class JoyConHub:
         except Exception:
             pass
 
-    def _keepalive_loop(self) -> None:
-        while self._running.is_set():
-            time.sleep(0.5)
+    def _keepalive_loop(self, stop: threading.Event) -> None:
+        while not stop.wait(0.5):
             with self._lock:
                 devs = list(self._devices.values())
             for d in devs:

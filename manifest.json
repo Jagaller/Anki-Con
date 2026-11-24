@@ -1,9 +1,9 @@
 {
   "package": "ankicon",
-  "name": "Ankicon",
+  "name": "Anki-Con",
   "mod": 0,
   "conflicts": [],
   "min_point_version": 50,
   "max_point_version": 0,
-  "human_version": "1.0.1"
+  "human_version": "1.1.0"
 }

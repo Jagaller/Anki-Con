@@ -1,6 +1,6 @@
 """
-Ankicon
-=======
+Anki-Con
+========
 
 Review with one or two Nintendo Joy-Cons. Every reviewer command -- Show
 Answer, Again/Hard/Good/Easy, and everything in the More menu -- can be mapped
@@ -60,7 +60,7 @@ def _on_quit() -> None:
 
 
 def _install_menu() -> None:
-    action = QAction("Ankicon…", mw)
+    action = QAction("Anki-Con…", mw)
     qconnect(action.triggered, open_dialog)
     mw.form.menuTools.addAction(action)
 
