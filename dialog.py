@@ -23,7 +23,7 @@ class OptionsDialog(QDialog):
         super().__init__(parent)
         self.cfg = cfg
         self.setWindowTitle("Anki-Con Options")
-        self.setMinimumWidth(480)
+        self.setMinimumWidth(400)
         style.apply(self)
 
         outer = QVBoxLayout(self)
@@ -32,33 +32,45 @@ class OptionsDialog(QDialog):
 
         self.chk_enabled = self._switch(cfg["enabled"])
         self.chk_seize = self._switch(cfg.get("seize_device", False))
-        self.chk_seize.setToolTip(
-            "macOS has its own Joy-Con driver and can hold the controller so "
-            "that Anki receives nothing. This takes it away from the system "
-            "while Anki is running. Turn it on if buttons do nothing, then "
-            "press Rescan.")
         self.chk_leds = self._switch(cfg.get("player_leds", True))
         self.spin_dead = self._spin(0.2, 0.95, cfg["stick_deadzone"])
         self._section(outer, "Controller", (
-            ("Listen for Joy-Cons", self.chk_enabled),
-            ("Take exclusive control of the controller", self.chk_seize),
-            ("Light the player LED on connected controllers", self.chk_leds),
-            ("Stick deadzone", self.spin_dead)))
+            ("Enable Joy-Cons", self.chk_enabled,
+             "Lets Anki-Con respond to your Joy-Cons. When this is off, their "
+             "buttons do nothing in Anki."),
+            ("Exclusive control", self.chk_seize,
+             "Stops macOS from using the Joy-Con while Anki has it. Turn this "
+             "on if your Joy-Con connects but its buttons do nothing."),
+            ("Player LED", self.chk_leds,
+             "Lights the player number on each connected Joy-Con. Turn this "
+             "off to keep the lights dark."),
+            ("Stick deadzone", self.spin_dead,
+             "How far you push the stick before it counts. Raise it if the "
+             "stick triggers by itself; lower it for a lighter touch.")))
 
         self.chk_reveal = self._switch(cfg["ease_reveals_answer"])
         self.chk_rumble = self._switch(cfg["rumble_on_answer"])
         self.spin_rumble = self._spin(0.0, 1.0, cfg["rumble_strength"])
         self._section(outer, "Reviewing", (
-            ("An ease button on the question side shows the answer instead",
-             self.chk_reveal),
-            ("Rumble when a card is answered", self.chk_rumble),
-            ("Rumble strength", self.spin_rumble)))
+            ("Reveal answer first", self.chk_reveal,
+             "If the answer is still hidden, pressing Again, Hard, Good or "
+             "Easy shows it. When this is off, the press is ignored."),
+            ("Rumble", self.chk_rumble,
+             "Vibrates the Joy-Con when you answer a card or use a card "
+             "action, such as Mark or Bury."),
+            ("Rumble strength", self.spin_rumble,
+             "How strongly the Joy-Con vibrates, from 0 (none) to 1 "
+             "(strongest).")))
 
         self.chk_tooltip = self._switch(cfg["show_tooltip_on_action"])
         self.chk_log = self._switch(cfg["verbose_log"])
         self._section(outer, "Debugging", (
-            ("Show a tooltip naming each action fired", self.chk_tooltip),
-            ("Verbose logging to the console", self.chk_log)))
+            ("Action tooltips", self.chk_tooltip,
+             "Briefly shows the name of each action when you use it, so you "
+             "can check what a button does."),
+            ("Verbose logging", self.chk_log,
+             "Prints controller activity to the console. Only useful for "
+             "tracking down a problem.")))
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 12, 0, 0)
@@ -96,15 +108,15 @@ class OptionsDialog(QDialog):
         v = QVBoxLayout(card)
         v.setContentsMargins(14, 2, 14, 2)
         v.setSpacing(0)
-        for n, (text, control) in enumerate(rows):
+        for n, (text, control, about) in enumerate(rows):
             if n:
                 v.addWidget(style.rule())
             line = QHBoxLayout()
             line.setContentsMargins(0, 8, 0, 8)
-            name = style.RowLabel(text, control)
-            name.setToolTip(control.toolTip())
-            line.addWidget(name, 1)
-            line.addSpacing(16)
+            line.setSpacing(7)
+            line.addWidget(style.RowLabel(text, control))
+            line.addWidget(style.HelpButton(text, about))
+            line.addStretch(1)
             line.addWidget(control)
             v.addLayout(line)
         outer.addWidget(card)
@@ -505,9 +517,10 @@ class AnkiconDialog(QDialog):
         if payload is None:
             showWarning("That file isn't an Anki-Con profile.", parent=self)
             return
+        # Selecting it here is silent, so load it explicitly: choosing the same
+        # entry again would not count as a change.
         self._refresh_profiles(select=payload["name"])
-        self.profile_combo.setCurrentIndex(
-            self.profile_combo.findData(payload["name"]))
+        self._on_profile_picked(self.profile_combo.currentIndex())
 
     def _profile_export(self) -> None:
         self._commit_current()

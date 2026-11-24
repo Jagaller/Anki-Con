@@ -338,3 +338,114 @@ class RowLabel(QLabel):
                 event.button() == Qt.MouseButton.LeftButton:
             self._target.click()
         super().mouseReleaseEvent(event)
+
+
+class HelpPopup(QWidget):
+    """A small speech bubble with a title and a short explanation."""
+
+    _ARROW = 8
+    _WIDTH = 250
+
+    def __init__(self, title: str, text: str, owner: QWidget) -> None:
+        super().__init__(owner.window(), Qt.WindowType.Popup
+                         | Qt.WindowType.FramelessWindowHint
+                         | Qt.WindowType.NoDropShadowWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        # Clicking the "?" again closes the bubble instead of reopening it.
+        self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, True)
+        self._above = False
+        self._tip_x = 0.0
+
+        self._box = QVBoxLayout(self)
+        self._box.setSpacing(4)
+        head = label(title)
+        font = head.font()
+        font.setWeight(QFont.Weight.DemiBold)
+        head.setFont(font)
+        self._box.addWidget(head)
+        # A non-breaking hyphen, so "Joy-Con" never splits across lines.
+        body = label(text.replace("Joy-Con", "Joy\u2011Con"), "muted")
+        body.setWordWrap(True)
+        body.setFixedWidth(self._WIDTH)
+        self._box.addWidget(body)
+
+    def show_beside(self, owner: QWidget) -> None:
+        """Open under the owner, or over it when there is no room below."""
+        self._pad(above=False)
+        size = self.sizeHint()
+        mid = owner.mapToGlobal(QPoint(owner.width() // 2, 0))
+        top = mid.y() + owner.height() + 2
+        x = mid.x() - size.width() // 2
+        screen = owner.screen()
+        if screen is not None:
+            area = screen.availableGeometry()
+            if top + size.height() > area.bottom():
+                self._pad(above=True)
+                top = mid.y() - size.height() - 2
+            x = max(area.left() + 8,
+                    min(x, area.right() - size.width() - 8))
+        self._tip_x = float(mid.x() - x)
+        self.setGeometry(x, top, size.width(), size.height())
+        self.show()
+
+    def _pad(self, above: bool) -> None:
+        self._above = above
+        a = self._ARROW
+        self._box.setContentsMargins(15, 12 + (0 if above else a),
+                                     15, 13 + (a if above else 0))
+        self._box.activate()
+
+    def paintEvent(self, _e) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        a = self._ARROW
+        r = QRectF(self.rect()).adjusted(
+            0.5, 0.5 + (0 if self._above else a),
+            -0.5, -0.5 - (a if self._above else 0))
+        body = QPainterPath()
+        body.addRoundedRect(r, 10, 10)
+        x = max(r.left() + 18, min(self._tip_x, r.right() - 18))
+        base, tip = (r.bottom() - 1, r.bottom() + a - 1) if self._above \
+            else (r.top() + 1, r.top() - a + 1)
+        arrow = QPainterPath(QPointF(x - a, base))
+        arrow.lineTo(x, tip)
+        arrow.lineTo(x + a, base)
+        arrow.closeSubpath()
+        p.setBrush(color("field_bottom" if is_dark() else "card"))
+        p.setPen(QPen(color("field_border"), 1.0))
+        p.drawPath(body.united(arrow))
+
+
+class HelpButton(QAbstractButton):
+    """The "?" beside a setting. Click it for an explanation."""
+
+    def __init__(self, title: str, text: str) -> None:
+        super().__init__()
+        self._title, self._text = title, text
+        self.popup = None
+        self.setFixedSize(18, 18)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.setAccessibleName(f"About {title}")
+        self.setAccessibleDescription(text)
+        qconnect(self.clicked, self._open)
+
+    def _open(self) -> None:
+        self.popup = HelpPopup(self._title, self._text, self)
+        self.popup.show_beside(self)
+
+    def paintEvent(self, _e) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        hot = self.underMouse() or self.hasFocus()
+        ink = QColor(ACCENT) if hot else color("muted")
+        p.setPen(QPen(ink, 1.2))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QRectF(1.5, 1.5, 15, 15))
+        font = p.font()
+        font.setPixelSize(11)
+        font.setWeight(QFont.Weight.DemiBold)
+        p.setFont(font)
+        p.drawText(QRectF(0, 0, 18, 18), Qt.AlignmentFlag.AlignCenter, "?")

@@ -162,7 +162,8 @@ They survive add-on updates. Settings under **Options…** aren't included.
 
 ## Options
 
-Press **Options…** at the bottom of the window.
+Press **Options…** at the bottom of the window. Click the **?** beside a setting
+to see what it does.
 
 <p align="center">
   <img src="docs/options.png" alt="The Options window, grouped into Controller, Reviewing and Debugging" width="440">
@@ -170,15 +171,15 @@ Press **Options…** at the bottom of the window.
 
 | Option | What it does |
 |---|---|
-| **Listen for Joy-Cons** | Turns Anki-Con on or off. |
-| **Take exclusive control of the controller** | Stops macOS from holding the Joy-Con. Try this if buttons do nothing. |
-| **Light the player LED on connected controllers** | Turn it off to keep the lights dark. |
-| **Stick deadzone** | How far the stick must move to count. |
-| **An ease button on the question side shows the answer instead** | Otherwise the press is ignored. |
-| **Rumble when a card is answered** | Turns rumble on or off. |
-| **Rumble strength** | How strong the rumble is. |
-| **Show a tooltip naming each action fired** | Names each action as it happens. |
-| **Verbose logging to the console** | Logs controller activity for debugging. |
+| **Enable Joy-Cons** | Lets Anki-Con respond to your Joy-Cons. |
+| **Exclusive control** | Stops macOS from using the Joy-Con while Anki has it. Try this if buttons do nothing. |
+| **Player LED** | Lights the player number on each Joy-Con. |
+| **Stick deadzone** | How far you push the stick before it counts. |
+| **Reveal answer first** | Pressing Again, Hard, Good or Easy shows a hidden answer. When off, the press is ignored. |
+| **Rumble** | Vibrates when you answer a card or use a card action, such as Mark or Bury. |
+| **Rumble strength** | From 0 (none) to 1 (strongest). |
+| **Action tooltips** | Briefly shows the name of each action. |
+| **Verbose logging** | Prints controller activity to the console. |
 
 Press **Save** in the main window to keep your changes.
 
@@ -188,7 +189,7 @@ Press **Save** in the main window to keep your changes.
 Bluetooth, press a button to wake it, then press **Rescan**.
 
 **It's connected, but the buttons do nothing.** macOS is probably holding the
-controller. Turn on **Take exclusive control of the controller** in
+controller. Turn on **Exclusive control** in
 **Options…**, then save. If that doesn't help, look in **Diagnostics…**:
 
 - `kIOReturnNotPermitted` means Anki needs Input Monitoring permission.
@@ -309,6 +310,7 @@ Anki-Con uses [semantic versioning](https://semver.org).
   match.
 - The add-on's name in Anki is now Anki-Con.
 - A refreshed look for the mapping, Options and Diagnostics windows.
+- Shorter option names, each with a **?** that explains it.
 - A simple connection indicator replaces the status text. Hover over it for
   details.
 - Show Answer only shows the answer. A second press used to grade the card; use
@@ -316,13 +318,14 @@ Anki-Con uses [semantic versioning](https://semver.org).
 
 **Fixed**
 
-- Turning **Listen for Joy-Cons** off and on now resumes listening.
+- Turning Joy-Cons off and on in Options now resumes listening.
 - Ease buttons no longer reveal the answer behind an open dialog or menu.
 - A stick held on a Joy-Con that disconnects no longer keeps repeating while the
   other stays connected.
 - A Joy-Con that connects in basic mode is now asked again until it switches to
   full mode.
-- Rumble when a card is answered now reaches the controller.
+- Rumble while reviewing now reaches the controller.
+- Importing a profile now loads it straight away.
 - Holding a stick on Bury Card or Bury Note now buries once, not about seven
   times a second.
 

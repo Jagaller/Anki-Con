@@ -263,7 +263,7 @@ class JoyConController:
                 # battery of "?" and letting it look like a flat controller.
                 parts.append(
                     f"{d['name']} — connected but sending nothing. macOS is "
-                    "probably holding it; enable “Take exclusive control” in "
+                    "probably holding it; enable “Exclusive control” in "
                     "Options, then Rescan.")
                 continue
             bat = d.get("battery")

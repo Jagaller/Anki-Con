@@ -208,7 +208,7 @@ class JoyConHub:
         dev.warned_silent = True
         self.log(f"{dev.name} is connected but has sent no input reports. "
                  "macOS is most likely holding the controller with its own "
-                 "driver -- try 'Take exclusive control' in Options.")
+                 "driver -- try 'Exclusive control' in Options.")
 
     def stats(self) -> dict:
         b = self._backend
