@@ -116,15 +116,9 @@ Each grip has its own mapping, and Anki-Con picks one based on what's connected.
 With one Joy-Con connected, you choose Horizontal or Handheld. With none, you
 can edit all three.
 
-<p align="center">
-  <b>Handheld (Vertical)</b><br>
-  <img src="docs/grip-handheld.png" alt="One purple Joy-Con mapped upright in the Handheld (Vertical) grip" width="760">
-</p>
-
-<p align="center">
-  <b>Horizontal</b><br>
-  <img src="docs/grip-horizontal.png" alt="One purple Joy-Con mapped sideways in the Horizontal grip" width="760">
-</p>
+| Handheld (Vertical) | Horizontal |
+|---|---|
+| ![One purple Joy-Con mapped upright in the Handheld (Vertical) grip](docs/grip-handheld.png) | ![One purple Joy-Con mapped sideways in the Horizontal grip](docs/grip-horizontal.png) |
 
 ## Default mapping
 
